@@ -24,6 +24,7 @@ const MAX_CONTINUATION_PASSES = 2; // allow extra continuation for truncated cod
 const REQUEST_TIMEOUT_MS = 90000; // free models can be slow — 90s per HTTP request
 const DEFAULT_CONCISE_CHAR_LIMIT = 2200;
 const MODEL_COOLDOWN_MS = 10 * 60 * 1000;
+const BLOCKED_PROVIDERS = ['anthropic/', 'openai/']; // never use paid Claude/OpenAI
 const ARCHITECT_TIMEOUT_MS = 90000;
 const AGENT_TIMEOUT_MS = 150000; // 2.5 min per agent — large coding tasks need time
 const REVIEWER_TIMEOUT_MS = 120000;
@@ -255,13 +256,9 @@ async function fetchOpenRouterModelIds() {
   const parsed = JSON.parse(raw);
   const models = Array.isArray(parsed?.data) ? parsed.data : [];
 
-  // Never use Claude or OpenAI — they consume credits extremely fast ($$$)
-  // Use paid credits only on cheap models (Ling-flash, Gemini-flash, etc.)
-  const BLOCKED_PROVIDERS = ['anthropic/', 'openai/'];
-
   // Cheap paid threshold: $0.0001 per token max (~$100/M tokens)
   // Ling-2.6-flash = $0.00000001/token ✓  |  Claude Sonnet = $0.000003/token ✗ (blocked by prefix anyway)
-  const CHEAP_PAID_MAX_PRICE = 0.0001;
+  const CHEAP_PAID_MAX_PRICE = 0.000001; // $0.000001/token max (~$1/M tokens)
 
   const isText = id => !['image','audio','lyria','clip','vision','flux'].some(x => id.includes(x));
   const isAllowed = id => !BLOCKED_PROVIDERS.some(p => id.startsWith(p));
