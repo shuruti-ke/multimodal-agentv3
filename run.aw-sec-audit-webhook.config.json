@@ -1,0 +1,13 @@
+{
+  "desc": "Fix MED-05 (audit log tamper-evidence) and HIGH-09 (webhook secrets plaintext). 1) In llm-analysis.js writeAudit(): after building the JSON line, compute HMAC-SHA256 of the line using process.env.AUDIT_HMAC_KEY (fallback: 'aw-audit-key'). Append the hex digest as field 'sig' before writing. In audit.html display the sig field in a truncated monospace span. 2) In auth-db.js webhook storage: when inserting a webhook, store sha256(secret) as webhook_secret_hash. Remove the raw secret from DB. On webhook delivery (ngo-routes.js), the client provides secret in X-Webhook-Secret header — compare sha256(header) to stored hash using timingSafeEqual.",
+  "stack": "Node.js, crypto, better-sqlite3 — llm-analysis.js, auth-db.js, ngo-routes.js",
+  "arch": "meta-llama/llama-3.3-70b-instruct:free",
+  "mode": "patch",
+  "nc": 2,
+  "out": "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/fix-audit-webhook.patch",
+  "instructions": "Return a unified git diff covering a/output/llm-analysis.js and a/output/auth-db.js. Surgical edits only. No markdown.",
+  "ctxFiles": [
+    "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/llm-analysis.js",
+    "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/auth-db.js"
+  ]
+}

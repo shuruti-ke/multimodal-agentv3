@@ -161,6 +161,22 @@ const instructions= arg('instr')    || cfg.instructions || '';
 const usePolish     = cfg.usePolish   || false;
 const polishModel   = cfg.polishModel || ''; // OpenRouter model ID for polish pass
 
+// ctxFiles: array of file paths to read and inject as context (for patch/refactor modes)
+const ctxFilePaths = Array.isArray(cfg.ctxFiles) ? cfg.ctxFiles : [];
+let autoFileCtx = fileCtx;
+if (!autoFileCtx && ctxFilePaths.length) {
+  autoFileCtx = ctxFilePaths.map(fp => {
+    const abs = path.isAbsolute(fp) ? fp : path.join(path.dirname(path.resolve(cfgFile)), fp);
+    try {
+      const src = fs.readFileSync(abs, 'utf8');
+      return `=== ${fp} ===\n${src}`;
+    } catch (e) {
+      return `=== ${fp} === [ERROR: ${e.message}]`;
+    }
+  }).join('\n\n');
+  if (autoFileCtx) console.log(`[config] Loaded ${ctxFilePaths.length} source file(s) as context`);
+}
+
 const ork  = process.env.OPENROUTER_KEY || process.env.OPENROUTER_KEY || cfg.ork;
 
 const requestedAgentModels = Array.isArray(cfg.agents) ? cfg.agents.filter(Boolean) : [];
@@ -435,7 +451,7 @@ const archSysMap = {
 const agentSysMap = {
   report:   `Write concise markdown for this module only. Return markdown only.`,
   docs:     `Write concise markdown for this module only. Return markdown only.`,
-  patch:    `Implement this module and return complete code only.`,
+  patch:    `Write ONLY the changes specified for this module. Use the exact language and stack specified (e.g. Node.js, not Python). Follow any output format instructions precisely (unified git diff, code snippet, etc.). No explanations, no markdown fences unless instructed. Surgical edits only.`,
   refactor: `Implement this module and return complete code only.`,
   debug:    `Implement this module and return complete code only.`,
   test:     `Implement this module and return complete code only.`,
@@ -446,7 +462,7 @@ const agentSysMap = {
 const revSysMap = {
   report:   `Merge modules into concise final markdown only.`,
   docs:     `Merge modules into concise final markdown only.`,
-  patch:    `Merge modules into one complete final code output only.`,
+  patch:    `Merge all module patches into one final unified output. Preserve file headers and hunk markers. No markdown fences, no explanations — output only.`,
   refactor: `Merge modules into one complete final code output only.`,
   debug:    `Merge modules into one complete final code output only.`,
   test:     `Merge modules into one complete final code output only.`,
@@ -467,14 +483,18 @@ async function run() {
   const arch = resolveModelSelection(requestedArch, filteredModelIds, 'architect');
   const reviewer = resolveModelSelection(requestedReviewer || arch, filteredModelIds, 'reviewer');
   const liveAvailableIds = filteredModelIds.filter(id => !isModelCoolingDown(id));
-  const agentModelIds = requestedAgentModels.length
+  // Preferred agents: first nc models (round-robin assignment). Fallback pool = ALL available models.
+  const preferredAgentIds = requestedAgentModels.length
     ? requestedAgentModels.filter(id => liveAvailableIds.includes(id))
     : liveAvailableIds.slice(0, Math.max(nc, 1));
-  if (!agentModelIds.length) {
+  if (!preferredAgentIds.length && !filteredModelIds.length) {
     throw new Error('No agent models available after live availability filtering.');
   }
-  const agentModels = agentModelIds.map(id => ({ id, label: id.split('/').pop() || id }));
-  lg(`Resolved models dynamically from OpenRouter: arch=${arch}, reviewer=${reviewer}, agents=${agentModels.map(a => a.id).join(', ')}`);
+  // Full fallback pool — all models usable when preferred are rate-limited
+  const allAgentIds = filteredModelIds;
+  const agentModels = (preferredAgentIds.length ? preferredAgentIds : filteredModelIds.slice(0, nc))
+    .map(id => ({ id, label: id.split('/').pop() || id }));
+  lg(`Resolved models dynamically from OpenRouter: arch=${arch}, reviewer=${reviewer}, agents=${agentModels.map(a => a.id).join(', ')} (+${allAgentIds.length - agentModels.length} fallbacks)`);
 
   const isReportMode = mode === 'report';
   const isDocMode    = mode === 'docs';
@@ -483,7 +503,7 @@ async function run() {
     ? `Task: ${desc}\nDomain: ${stack}`
     : `Project: ${desc}\nStack: ${stack}`;
   const protocolTask = buildLearningProtocolPrompt(baseTask, instructions);
-  const archUsr = `${protocolTask}${fileCtx ? '\n\nContext:\n' + fileCtx : ''}`;
+  const archUsr = `${protocolTask}${autoFileCtx ? '\n\nContext:\n' + autoFileCtx : ''}`;
 
   // ── Phase 1: Architect (with multi-model fallback) ─────────────────────────
   // Build ordered list: requested arch first, then remaining available models
@@ -523,18 +543,20 @@ async function run() {
   lg(`[2/4] Launching ${nc} parallel agents...`);
   const agentSys = agentSysMap[mode] || agentSysMap.code;
   const ao = {};
-  const livePool = agentModels;
 
   await Promise.all(mods.map(async (m, i) => {
     const runOneAgent = async () => {
     const moduleTask = (isReportMode || isDocMode)
       ? `Section: ${m.module}\nInstructions: ${m.spec}\nDomain: ${stack}`
       : `Module: ${m.module}\nFile: ${m.outputFile || outFile}\nSpec:\n${m.spec}\nStack: ${stack}`;
-    const agentUsr = `${buildLearningProtocolPrompt(moduleTask)}${fileCtx ? '\n\nContext:\n' + fileCtx : ''}`;
+    const agentUsr = `${buildLearningProtocolPrompt(moduleTask, instructions)}${autoFileCtx ? '\n\nContext:\n' + autoFileCtx : ''}`;
 
-    const preferred = livePool[i % livePool.length];
-    const fallbacks = [preferred, ...livePool.filter(x => x.id !== preferred.id)]
-      .filter(x => !isModelCoolingDown(x.id));
+    // Preferred: round-robin from preferred agents. Fallback: all available models.
+    const preferred = agentModels[i % agentModels.length];
+    const fallbacks = [preferred, ...allAgentIds
+      .filter(id => id !== preferred.id)
+      .map(id => ({ id, label: id.split('/').pop() || id }))
+    ].filter(x => !isModelCoolingDown(x.id));
     let lastErr = null;
     let salvaged = null; // partial output from a timed-out model
 

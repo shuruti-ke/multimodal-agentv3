@@ -1,0 +1,10 @@
+{
+  "desc": "Fix MED-04 (JWT revocation) and LOW-02 (account lockout) in auth-db.js. 1) Add CREATE TABLE IF NOT EXISTS revoked_tokens(token_hash TEXT PRIMARY KEY, expires_at INTEGER). In requireAuth(), after jwt.verify(), compute sha256(token) and query revoked_tokens — if found return 403 'Token revoked'. In /auth/logout route, insert sha256(token) + decoded.exp*1000 into revoked_tokens. Add setInterval every 60min to DELETE FROM revoked_tokens WHERE expires_at < Date.now(). 2) Add CREATE TABLE IF NOT EXISTS login_attempts(username TEXT PRIMARY KEY, count INTEGER DEFAULT 0, locked_until INTEGER DEFAULT 0). In /auth/login before verifyPassword: SELECT locked_until FROM login_attempts WHERE username=? — if locked_until > Date.now() return 429. After failed password: INSERT OR REPLACE with count+1; if count>=5 set locked_until=Date.now()+1800000 and reset count=0. After successful login: DELETE FROM login_attempts WHERE username=?.",
+  "stack": "Node.js, better-sqlite3, jsonwebtoken, crypto — auth-db.js only",
+  "arch": "baidu/cobuddy:free",
+  "mode": "patch",
+  "nc": 2,
+  "out": "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/fix-jwt-lockout.js",
+  "instructions": "Output ONLY Node.js code for the changed sections. Show each change as: // CHANGE: <description> followed by the new code block. No unified diff format. No markdown fences. Node.js only.",
+  "ctxFiles": ["C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/auth-db.js"]
+}

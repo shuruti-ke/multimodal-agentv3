@@ -1,0 +1,13 @@
+{
+  "desc": "Fix MED-06 (X-Forwarded-For spoofable) and HIGH-07 (prompt injection incomplete) in security-middleware.js and llm-analysis.js. 1) In security-middleware.js getClientIp(): only trust X-Forwarded-For if env var TRUST_PROXY=true is set. Otherwise use req.socket.remoteAddress or req.ip directly. This prevents attackers spoofing their IP to bypass rate limits. 2) In llm-analysis.js sanitizePromptInput(): extend INJECTION_PATTERN to also block lines starting with: 'Assistant:', 'Human:', 'User:', 'AI:', 'Jailbreak', 'DAN', 'Pretend', 'Roleplay', 'Override', 'Bypass', 'Disregard'. Also strip any line containing </s>, <|im_end|>, <|end|>, [/INST], <<SYS>>, [SYS]. Limit to 1500 chars (down from 2000).",
+  "stack": "Node.js — security-middleware.js and llm-analysis.js",
+  "arch": "openrouter/owl-alpha",
+  "mode": "patch",
+  "nc": 2,
+  "out": "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/fix-ip-prompt.patch",
+  "instructions": "Return a unified git diff covering a/output/security-middleware.js and a/output/llm-analysis.js. Surgical edits only. No markdown.",
+  "ctxFiles": [
+    "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/security-middleware.js",
+    "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/llm-analysis.js"
+  ]
+}

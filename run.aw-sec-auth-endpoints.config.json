@@ -1,0 +1,13 @@
+{
+  "desc": "Fix LOW-01: add soft auth to /explain and /social-search in kenya-watch-backend.js. Soft auth means: if Authorization header is present, validate the JWT and attach req.user. If token is present but invalid/expired return 401. If no token, allow through as anonymous. Create a middleware softAuth(req, res, next) in auth-db.js using the existing JWT_SECRET and verifyToken — attach req.user if valid, else req.user = null. Export it. Apply softAuth to app.get('/explain/:location') and app.get('/social-search'). Log req.user?.username or 'anonymous' in the audit entry for /explain.",
+  "stack": "Node.js, jsonwebtoken — auth-db.js and kenya-watch-backend.js",
+  "arch": "baidu/cobuddy:free",
+  "mode": "patch",
+  "nc": 2,
+  "out": "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/fix-auth-endpoints.patch",
+  "instructions": "Return a unified git diff covering a/output/auth-db.js and a/output/kenya-watch-backend.js. Surgical edits only. No markdown.",
+  "ctxFiles": [
+    "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/auth-db.js",
+    "C:/Users/shuru/Documents/AIProjects/Kenya-Watch/output/kenya-watch-backend.js"
+  ]
+}
